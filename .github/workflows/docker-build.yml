@@ -1,4 +1,4 @@
-name: Build and Push Docker
+name: Build-and-Push-Docker
 
 on:
   push:
@@ -16,16 +16,35 @@ jobs:
       - name: Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker Hub
+      - name: Docker Hub login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Extract tag from commit message
+        id: extract_tag
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-nginx:1.0.0 .
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:1.0.0
+          MSG="${{ github.event.head_commit.message }}"
+          TAG=$(echo "$MSG" | grep -oE 'ver:[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          if [ -z "$TAG" ]; then
+            echo "No tag found. Using 'latest'"
+            echo "TAG=latest" >> $GITHUB_ENV
+          else
+            echo "Using tag: ${TAG#ver:}"
+            echo "TAG=${TAG#ver:}" >> $GITHUB_ENV
+          fi
+
+      - name: Build and push Docker image with version tag
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} .
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }}
+
+      - name: Also tag as latest and push (optional)
+        if: env.TAG != 'latest'
+        run: |
+          docker tag ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} ${{ secrets.DOCKER_USERNAME }}/my-nginx:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:latest
 
       - name: Done
-        run: echo "Docker image pushed!"
+        run: echo "Docker image ${{ env.TAG }} (and latest) pushed to Docker Hub!"
