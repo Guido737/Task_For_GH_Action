@@ -1,4 +1,4 @@
-name: Build-and-Push-Docker
+name: Build and Push Docker
 
 on:
   push:
@@ -10,13 +10,13 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Get code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker Hub login
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -28,23 +28,21 @@ jobs:
           MSG="${{ github.event.head_commit.message }}"
           TAG=$(echo "$MSG" | grep -oE 'ver:[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           if [ -z "$TAG" ]; then
-            echo "No tag found. Using 'latest'"
             echo "TAG=latest" >> $GITHUB_ENV
           else
-            echo "Using tag: ${TAG#ver:}"
             echo "TAG=${TAG#ver:}" >> $GITHUB_ENV
           fi
 
-      - name: Build and push Docker image with version tag
+      - name: Build and push Docker image
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} .
           docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }}
 
-      - name: Also tag as latest and push (optional)
-        if: env.TAG != 'latest'
+      - name: Send Telegram notification
         run: |
-          docker tag ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} ${{ secrets.DOCKER_USERNAME }}/my-nginx:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:latest
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="Docker image version ${{ env.TAG }} pushed successfully!"
 
       - name: Done
-        run: echo "Docker image ${{ env.TAG }} (and latest) pushed to Docker Hub!"
+        run: echo "Workflow completed!"
