@@ -2,8 +2,8 @@ name: Build and Push Docker
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'ver:*'
 
 jobs:
   test:
@@ -34,23 +34,18 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Extract tag from commit message
-        id: extract_tag
-        run: |
-          MSG="${{ github.event.head_commit.message }}"
-          TAG=$(echo "$MSG" | grep -oE 'ver:[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          if [ -z "$TAG" ]; then
-            echo "TAG=latest" >> $GITHUB_ENV
-          else
-            echo "TAG=${TAG#ver:}" >> $GITHUB_ENV
-          fi
+      - name: Extract tag from git ref
+        run: echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image with cache
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} .
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }}
+          docker buildx build \
+            --cache-from=type=registry,ref=${{ secrets.DOCKER_USERNAME }}/my-nginx:cache \
+            --cache-to=type=registry,ref=${{ secrets.DOCKER_USERNAME }}/my-nginx:cache,mode=max \
+            -t ${{ secrets.DOCKER_USERNAME }}/my-nginx:${{ env.TAG }} \
+            --push .
 
-      - name: Send Telegram notification
+      - name: Telegram notification
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
