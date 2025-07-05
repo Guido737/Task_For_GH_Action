@@ -6,14 +6,26 @@ on:
       - main
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-24.04
-
     steps:
-      - name: Checkout code
+      - name: Get code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Run test
+        run: |
+          echo "Start testing index.html"
+          test -f index.html
+
+  build:
+    runs-on: ubuntu-24.04
+    needs: test
+
+    steps:
+      - name: Get code
+        uses: actions/checkout@v4
+
+      - name: Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
